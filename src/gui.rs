@@ -19,38 +19,30 @@ const PIECE_COLORS: &[egui::Color32] = &[
 ];
 
 pub struct BrainBlockApp {
+    current_set: usize,
     puzzle: Puzzle,
     board_width: i32,
     board_height: i32,
-    grid: Vec<Vec<Option<usize>>>, // 儲存 (x, y) 上的 piece_index
+    grid: Vec<Vec<Option<usize>>>,
+    // TODO: implement pre-placement and dragging
+    pre_placed: Vec<Placement>,
 }
 
 impl Default for BrainBlockApp {
     fn default() -> Self {
-        // 載入 Set 2 (8x5) 
-        let width = 8;
-        let height = 5;
-        let pieces = vec![
-            Piece::new(vec![(0, 0), (0, 1), (1, 0), (1, 1)]),
-            Piece::new(vec![(0, 0), (0, 1), (1, 0), (1, 1)]),
-            Piece::new(vec![(0, 0), (0, 1), (0, 2), (0, 3)]),
-            Piece::new(vec![(0, 0), (0, 1), (0, 2), (0, 3)]),
-            Piece::new(vec![(0, 0), (0, 1), (0, 2), (1, 0)]),
-            Piece::new(vec![(0, 0), (0, 1), (0, 2), (1, 0)]),
-            Piece::new(vec![(0, 0), (1, 0), (1, 1), (2, 0)]),
-            Piece::new(vec![(0, 0), (1, 0), (1, 1), (2, 0)]),
-            Piece::new(vec![(0, 0), (1, 0), (1, 1), (2, 1)]),
-            Piece::new(vec![(0, 0), (1, 0), (1, 1), (2, 1)]),
-        ];
-        
-        let puzzle = Puzzle::new(width, height, pieces);
+        let set = 2;
+        let puzzle = Puzzle::load_puzzle(set);
+        let width = puzzle.width;
+        let height = puzzle.height;
         let grid = vec![vec![None; width as usize]; height as usize];
         
         Self {
+            current_set: set,
             puzzle,
             board_width: width,
             board_height: height,
             grid,
+            pre_placed: Vec::new(),
         }
     }
 }
@@ -58,6 +50,16 @@ impl Default for BrainBlockApp {
 impl BrainBlockApp {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         Self::default()
+    }
+
+    fn change_set(&mut self, set: usize) {
+        if self.current_set == set { return; }
+        self.current_set = set;
+        self.puzzle = Puzzle::load_puzzle(set);
+        self.board_width = self.puzzle.width;
+        self.board_height = self.puzzle.height;
+        self.grid = vec![vec![None; self.board_width as usize]; self.board_height as usize];
+        self.pre_placed.clear();
     }
 }
 
@@ -68,9 +70,16 @@ impl eframe::App for BrainBlockApp {
             ui.separator();
 
             ui.horizontal(|ui| {
+                ui.label("Puzzle Set:");
+                if ui.selectable_value(&mut self.current_set, 1, "Set 1 (3x2)").clicked() { self.change_set(1); }
+                if ui.selectable_value(&mut self.current_set, 2, "Set 2 (8x5)").clicked() { self.change_set(2); }
+                if ui.selectable_value(&mut self.current_set, 3, "Set 3 (10x6)").clicked() { self.change_set(3); }
+            });
+            ui.separator();
+
+            ui.horizontal(|ui| {
                 if ui.button("Solve").clicked() {
-                    if let Some(solution) = self.puzzle.solve() {
-                        // 清空並更新 Grid
+                    if let Some(solution) = self.puzzle.solve(&self.pre_placed) {
                         self.grid = vec![vec![None; self.board_width as usize]; self.board_height as usize];
                         for placement in solution {
                             for p in &placement.piece.coords {
@@ -85,11 +94,13 @@ impl eframe::App for BrainBlockApp {
                 }
                 if ui.button("Reset").clicked() {
                     self.grid = vec![vec![None; self.board_width as usize]; self.board_height as usize];
+                    self.pre_placed.clear();
                 }
             });
 
             ui.add_space(20.0);
 
+            // Draw Board
             let (rect, _response) = ui.allocate_exact_size(
                 egui::vec2(self.board_width as f32 * 40.0, self.board_height as f32 * 40.0),
                 egui::Sense::hover(),
