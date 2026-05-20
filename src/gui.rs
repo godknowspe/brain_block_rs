@@ -2,6 +2,9 @@
 use eframe::egui;
 use crate::puzzle::{Puzzle, Placement};
 use crate::shape::Piece;
+use std::sync::mpsc::{channel, Receiver};
+use std::thread;
+use std::time::{Duration, Instant};
 
 const PIECE_COLORS: &[egui::Color32] = &[
     egui::Color32::from_rgb(255, 107, 107), // #FF6B6B
@@ -27,6 +30,9 @@ pub struct BrainBlockApp {
     pre_placed: Vec<Placement>,
     solution: Option<Vec<Placement>>,
     held_piece: Option<(usize, Piece)>,
+    solving: bool,
+    solution_receiver: Option<Receiver<(Option<Vec<Placement>>, Duration)>>,
+    solve_time: Option<Duration>,
 }
 
 impl Default for BrainBlockApp {
@@ -46,6 +52,9 @@ impl Default for BrainBlockApp {
             pre_placed: Vec::new(),
             solution: None,
             held_piece: None,
+            solving: false,
+            solution_receiver: None,
+            solve_time: None,
         }
     }
 }
@@ -63,6 +72,9 @@ impl BrainBlockApp {
         self.pre_placed.clear();
         self.solution = None;
         self.held_piece = None;
+        self.solving = false;
+        self.solution_receiver = None;
+        self.solve_time = None;
         self.update_grid();
     }
 
@@ -84,6 +96,22 @@ impl BrainBlockApp {
 impl eframe::App for BrainBlockApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+
+        // Handle incoming background solve results
+        if let Some(rx) = &self.solution_receiver {
+            if let Ok((sol, duration)) = rx.try_recv() {
+                self.solving = false;
+                self.solve_time = Some(duration);
+                self.solution_receiver = None;
+                if let Some(solution) = sol {
+                    self.solution = Some(solution);
+                    self.update_grid();
+                } else {
+                    println!("No solution found!");
+                }
+            }
+        }
+
         
         if ctx.input(|i| i.key_pressed(egui::Key::R)) {
             if let Some((_, ref mut piece)) = self.held_piece {
@@ -97,6 +125,9 @@ impl eframe::App for BrainBlockApp {
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.held_piece = None;
+        self.solving = false;
+        self.solution_receiver = None;
+        self.solve_time = None;
         }
 
         egui::CentralPanel::default().show_inside(ui, |ui| {
@@ -117,19 +148,41 @@ impl eframe::App for BrainBlockApp {
             ui.separator();
 
             ui.horizontal(|ui| {
-                if ui.button("Solve").clicked() {
-                    if let Some(solution) = self.puzzle.solve(&self.pre_placed) {
-                        self.solution = Some(solution);
-                        self.update_grid();
-                    } else {
-                        println!("No solution found!");
-                    }
+                if ui.button("Solve").clicked() && !self.solving {
+                    self.solving = true;
+                    self.solve_time = None;
+                    
+                    let puzzle = self.puzzle.clone();
+                    let pre_placed = self.pre_placed.clone();
+                    let (tx, rx) = channel();
+                    self.solution_receiver = Some(rx);
+                    
+                    let ctx_clone = ctx.clone();
+                    thread::spawn(move || {
+                        let start = Instant::now();
+                        let sol = puzzle.solve(&pre_placed);
+                        let duration = start.elapsed();
+                        let _ = tx.send((sol, duration));
+                        ctx_clone.request_repaint(); // Wake up UI thread
+                    });
                 }
-                if ui.button("Reset / Clear").clicked() {
+                if ui.button("Reset / Clear").clicked() && !self.solving {
                     self.pre_placed.clear();
                     self.solution = None;
                     self.update_grid();
                 }
+
+                if self.solving {
+                    ui.spinner();
+                    ui.label("Solving in background...");
+                } else if let Some(t) = self.solve_time {
+                    if self.solution.is_some() {
+                        ui.label(egui::RichText::new(format!("Solved in {:?}", t)).color(egui::Color32::GREEN));
+                    } else {
+                        ui.label(egui::RichText::new(format!("No solution (took {:?})", t)).color(egui::Color32::RED));
+                    }
+                }
+
             });
 
             ui.add_space(20.0);
@@ -140,7 +193,7 @@ impl eframe::App for BrainBlockApp {
                 egui::Sense::click(),
             );
 
-            if response.clicked() || response.secondary_clicked() {
+            if (response.clicked() || response.secondary_clicked()) && !self.solving {
                 if let Some(pos) = response.hover_pos() {
                     let cx = ((pos.x - rect.min.x) / 40.0).floor() as i32;
                     let cy = ((pos.y - rect.min.y) / 40.0).floor() as i32;
@@ -177,6 +230,9 @@ impl eframe::App for BrainBlockApp {
                                     dy: cy,
                                 });
                                 self.held_piece = None;
+        self.solving = false;
+        self.solution_receiver = None;
+        self.solve_time = None;
                                 self.solution = None;
                                 self.update_grid();
                             }

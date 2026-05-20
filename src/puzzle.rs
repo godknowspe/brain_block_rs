@@ -1,6 +1,5 @@
-use crate::shape::{Piece, Point};
+use crate::shape::Piece;
 use dlx_rs::Solver;
-use std::collections::HashSet;
 
 #[derive(Clone)]
 pub struct Puzzle {
