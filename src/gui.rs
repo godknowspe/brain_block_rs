@@ -53,7 +53,7 @@ impl BrainBlockApp {
     }
 
     fn change_set(&mut self, set: usize) {
-        if self.current_set == set { return; }
+        // removed early return bug
         self.current_set = set;
         self.puzzle = Puzzle::load_puzzle(set);
         self.board_width = self.puzzle.width;
@@ -71,9 +71,14 @@ impl eframe::App for BrainBlockApp {
 
             ui.horizontal(|ui| {
                 ui.label("Puzzle Set:");
-                if ui.selectable_value(&mut self.current_set, 1, "Set 1 (3x2)").clicked() { self.change_set(1); }
-                if ui.selectable_value(&mut self.current_set, 2, "Set 2 (8x5)").clicked() { self.change_set(2); }
-                if ui.selectable_value(&mut self.current_set, 3, "Set 3 (10x6)").clicked() { self.change_set(3); }
+                let mut new_set = self.current_set;
+                ui.selectable_value(&mut new_set, 1, "Set 1 (3x2)");
+                ui.selectable_value(&mut new_set, 2, "Set 2 (8x5)");
+                ui.selectable_value(&mut new_set, 3, "Set 3 (10x6)");
+                
+                if new_set != self.current_set {
+                    self.change_set(new_set);
+                }
             });
             ui.separator();
 
