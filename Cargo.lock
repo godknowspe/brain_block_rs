@@ -5,3 +5,12 @@ version = 4
 [[package]]
 name = "brain_block"
 version = "0.1.0"
+dependencies = [
+ "dlx-rs",
+]
+
+[[package]]
+name = "dlx-rs"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7b06b8872225caed8fe68316c391111d055aca97223461eedec5b34482c9c25"
