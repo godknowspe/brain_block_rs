@@ -35,7 +35,6 @@ impl eframe::App for BrainBlockApp {
 
             ui.add_space(20.0);
 
-            // 繪製一個簡單的棋盤佔位
             let (rect, _response) = ui.allocate_exact_size(
                 egui::vec2(self.board_width as f32 * 40.0, self.board_height as f32 * 40.0),
                 egui::Sense::hover(),
@@ -60,10 +59,5 @@ impl eframe::App for BrainBlockApp {
                 }
             }
         });
-    }
-    
-    // egui 0.34 需要實作 clear_color
-    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        egui::Rgba::TRANSPARENT.to_array()
     }
 }
