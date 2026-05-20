@@ -28,10 +28,11 @@ pub struct BrainBlockApp {
     board_height: i32,
     grid: Vec<Vec<Option<usize>>>,
     pre_placed: Vec<Placement>,
-    solution: Option<Vec<Placement>>,
+    solutions: Vec<Vec<Placement>>,
+    solution_idx: usize,
     held_piece: Option<(usize, Piece)>,
     solving: bool,
-    solution_receiver: Option<Receiver<(Option<Vec<Placement>>, Duration)>>,
+    solution_receiver: Option<Receiver<(Vec<Vec<Placement>>, Duration)>>,
     solve_time: Option<Duration>,
 }
 
@@ -50,7 +51,8 @@ impl Default for BrainBlockApp {
             board_height: height,
             grid,
             pre_placed: Vec::new(),
-            solution: None,
+            solutions: Vec::new(),
+            solution_idx: 0,
             held_piece: None,
             solving: false,
             solution_receiver: None,
@@ -70,7 +72,8 @@ impl BrainBlockApp {
         self.board_width = self.puzzle.width;
         self.board_height = self.puzzle.height;
         self.pre_placed.clear();
-        self.solution = None;
+        self.solutions.clear();
+        self.solution_idx = 0;
         self.held_piece = None;
         self.solving = false;
         self.solution_receiver = None;
@@ -80,7 +83,7 @@ impl BrainBlockApp {
 
     fn update_grid(&mut self) {
         self.grid = vec![vec![None; self.board_width as usize]; self.board_height as usize];
-        let placements = if let Some(sol) = &self.solution { sol } else { &self.pre_placed };
+        let placements = if !self.solutions.is_empty() { &self.solutions[self.solution_idx] } else { &self.pre_placed };
         for p in placements {
             for pt in &p.piece.coords {
                 let cx = (pt.x + p.dx) as usize;
@@ -99,16 +102,13 @@ impl eframe::App for BrainBlockApp {
 
         // Handle incoming background solve results
         if let Some(rx) = &self.solution_receiver {
-            if let Ok((sol, duration)) = rx.try_recv() {
+            if let Ok((sols, duration)) = rx.try_recv() {
                 self.solving = false;
                 self.solve_time = Some(duration);
                 self.solution_receiver = None;
-                if let Some(solution) = sol {
-                    self.solution = Some(solution);
-                    self.update_grid();
-                } else {
-                    println!("No solution found!");
-                }
+                self.solutions = sols;
+                self.solution_idx = 0;
+                self.update_grid();
             }
         }
 
@@ -160,15 +160,17 @@ impl eframe::App for BrainBlockApp {
                     let ctx_clone = ctx.clone();
                     thread::spawn(move || {
                         let start = Instant::now();
-                        let sol = puzzle.solve(&pre_placed);
+                        // 找最多 10 個解
+                        let sols = puzzle.solve(&pre_placed, 10);
                         let duration = start.elapsed();
-                        let _ = tx.send((sol, duration));
+                        let _ = tx.send((sols, duration));
                         ctx_clone.request_repaint(); // Wake up UI thread
                     });
                 }
                 if ui.button("Reset / Clear").clicked() && !self.solving {
                     self.pre_placed.clear();
-                    self.solution = None;
+                    self.solutions.clear();
+        self.solution_idx = 0;
                     self.update_grid();
                 }
 
@@ -176,8 +178,23 @@ impl eframe::App for BrainBlockApp {
                     ui.spinner();
                     ui.label("Solving in background...");
                 } else if let Some(t) = self.solve_time {
-                    if self.solution.is_some() {
-                        ui.label(egui::RichText::new(format!("Solved in {:?}", t)).color(egui::Color32::GREEN));
+                    if !self.solutions.is_empty() {
+                        ui.label(egui::RichText::new(format!("Found {} solution(s) in {:?}", self.solutions.len(), t)).color(egui::Color32::GREEN));
+                        
+                        ui.separator();
+                        if ui.button("<").clicked() {
+                            if self.solution_idx > 0 {
+                                self.solution_idx -= 1;
+                                self.update_grid();
+                            }
+                        }
+                        ui.label(format!(" {} / {} ", self.solution_idx + 1, self.solutions.len()));
+                        if ui.button(">").clicked() {
+                            if self.solution_idx + 1 < self.solutions.len() {
+                                self.solution_idx += 1;
+                                self.update_grid();
+                            }
+                        }
                     } else {
                         ui.label(egui::RichText::new(format!("No solution (took {:?})", t)).color(egui::Color32::RED));
                     }
@@ -202,7 +219,8 @@ impl eframe::App for BrainBlockApp {
                         if cx >= 0 && cx < self.board_width && cy >= 0 && cy < self.board_height {
                             if let Some(idx) = self.grid[cy as usize][cx as usize] {
                                 self.pre_placed.retain(|p| p.piece_index != idx);
-                                self.solution = None;
+                                self.solutions.clear();
+        self.solution_idx = 0;
                                 self.update_grid();
                             }
                         }
@@ -233,7 +251,8 @@ impl eframe::App for BrainBlockApp {
         self.solving = false;
         self.solution_receiver = None;
         self.solve_time = None;
-                                self.solution = None;
+                                self.solutions.clear();
+        self.solution_idx = 0;
                                 self.update_grid();
                             }
                         }
@@ -271,7 +290,7 @@ impl eframe::App for BrainBlockApp {
             ui.horizontal_wrapped(|ui| {
                 for (i, piece) in self.puzzle.pieces.iter().enumerate() {
                     // if part of solution or pre-placed, skip
-                    if placed_indices.contains(&i) || (self.solution.is_some() && self.solution.as_ref().unwrap().iter().any(|p| p.piece_index == i)) {
+                    if placed_indices.contains(&i) || (!self.solutions.is_empty() && self.solutions[self.solution_idx].iter().any(|p| p.piece_index == i)) {
                         continue;
                     }
                     
@@ -304,7 +323,8 @@ impl eframe::App for BrainBlockApp {
             
             if let Some(held) = newly_held {
                 self.held_piece = Some(held);
-                self.solution = None; 
+                self.solutions.clear();
+        self.solution_idx = 0; 
                 self.update_grid();
             }
 

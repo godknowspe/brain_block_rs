@@ -62,7 +62,7 @@ impl Puzzle {
         self.pieces.len() + 1 + cell_idx
     }
 
-    pub fn solve(&self, pre_placed: &[Placement]) -> Option<Vec<Placement>> {
+    pub fn solve(&self, pre_placed: &[Placement], max_solutions: usize) -> Vec<Vec<Placement>> {
         let num_pieces = self.pieces.len();
         let num_cells = (self.width * self.height) as usize;
         let total_cols = num_pieces + num_cells;
@@ -124,6 +124,13 @@ impl Puzzle {
                 }
             }
         }
-        solver.solve()
+        let mut results = Vec::new();
+        while let Some(sol) = solver.solve() {
+            results.push(sol);
+            if results.len() >= max_solutions {
+                break;
+            }
+        }
+        results
     }
 }
