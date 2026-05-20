@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use eframe::egui;
 
 #[derive(Default)]
@@ -19,14 +20,13 @@ impl BrainBlockApp {
 
 impl eframe::App for BrainBlockApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show_inside(ctx, |ui| {
+        egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Brain Block Puzzle Solver");
             ui.separator();
 
             ui.horizontal(|ui| {
                 if ui.button("Solve").clicked() {
                     self.solved = true;
-                    // TODO: 觸發背景解題
                 }
                 if ui.button("Reset").clicked() {
                     self.solved = false;
@@ -60,5 +60,10 @@ impl eframe::App for BrainBlockApp {
                 }
             }
         });
+    }
+    
+    // egui 0.34 需要實作 clear_color
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        egui::Rgba::TRANSPARENT.to_array()
     }
 }
