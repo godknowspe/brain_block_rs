@@ -211,6 +211,7 @@ impl eframe::App for BrainBlockApp {
             // Inventory
             let placed_indices: std::collections::HashSet<_> = self.pre_placed.iter().map(|p| p.piece_index).collect();
             
+            let mut newly_held = None;
             ui.horizontal_wrapped(|ui| {
                 for (i, piece) in self.puzzle.pieces.iter().enumerate() {
                     // if part of solution or pre-placed, skip
@@ -227,9 +228,7 @@ impl eframe::App for BrainBlockApp {
                     );
                     
                     if inv_resp.clicked() {
-                        self.held_piece = Some((i, piece.clone()));
-                        self.solution = None; 
-                        self.update_grid();
+                        newly_held = Some((i, piece.clone()));
                     }
                     
                     let inv_painter = ui.painter();
@@ -246,6 +245,12 @@ impl eframe::App for BrainBlockApp {
                     ui.add_space(15.0);
                 }
             });
+            
+            if let Some(held) = newly_held {
+                self.held_piece = Some(held);
+                self.solution = None; 
+                self.update_grid();
+            }
 
             // Held piece preview
             if let Some((idx, piece)) = &self.held_piece {
