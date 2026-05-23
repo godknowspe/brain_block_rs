@@ -215,18 +215,37 @@ impl eframe::App for BrainBlockApp {
                     let cx = ((pos.x - rect.min.x) / 40.0).floor() as i32;
                     let cy = ((pos.y - rect.min.y) / 40.0).floor() as i32;
 
-                    if response.secondary_clicked() || (response.clicked() && self.held_piece.is_none()) {
+                    if response.secondary_clicked() {
                         if cx >= 0 && cx < self.board_width && cy >= 0 && cy < self.board_height {
                             if let Some(idx) = self.grid[cy as usize][cx as usize] {
                                 self.pre_placed.retain(|p| p.piece_index != idx);
                                 self.solutions.clear();
-        self.solution_idx = 0;
+                                self.solution_idx = 0;
                                 self.update_grid();
                             }
                         }
                     } 
                     else if response.clicked() {
-                        if let Some((idx, piece)) = self.held_piece.clone() {
+                        if !self.solutions.is_empty() {
+                            // If a solution is displayed, clear it to return to editing mode
+                            self.solutions.clear();
+                            self.solution_idx = 0;
+                            self.update_grid();
+                        } else if self.held_piece.is_none() {
+                            // Pick up a placed piece from the board
+                            if cx >= 0 && cx < self.board_width && cy >= 0 && cy < self.board_height {
+                                if let Some(idx) = self.grid[cy as usize][cx as usize] {
+                                    if let Some(pos_idx) = self.pre_placed.iter().position(|p| p.piece_index == idx) {
+                                        let placement = self.pre_placed.remove(pos_idx);
+                                        self.held_piece = Some((idx, placement.piece));
+                                        self.solutions.clear();
+                                        self.solution_idx = 0;
+                                        self.update_grid();
+                                    }
+                                }
+                            }
+                        } else if let Some((idx, piece)) = self.held_piece.clone() {
+                            // Place the held piece on the board
                             let mut valid = true;
                             for pt in &piece.coords {
                                 let nx = pt.x + cx;
@@ -248,11 +267,11 @@ impl eframe::App for BrainBlockApp {
                                     dy: cy,
                                 });
                                 self.held_piece = None;
-        self.solving = false;
-        self.solution_receiver = None;
-        self.solve_time = None;
+                                self.solving = false;
+                                self.solution_receiver = None;
+                                self.solve_time = None;
                                 self.solutions.clear();
-        self.solution_idx = 0;
+                                self.solution_idx = 0;
                                 self.update_grid();
                             }
                         }
@@ -289,8 +308,9 @@ impl eframe::App for BrainBlockApp {
             let mut newly_held = None;
             ui.horizontal_wrapped(|ui| {
                 for (i, piece) in self.puzzle.pieces.iter().enumerate() {
-                    // if part of solution or pre-placed, skip
-                    if placed_indices.contains(&i) || (!self.solutions.is_empty() && self.solutions[self.solution_idx].iter().any(|p| p.piece_index == i)) {
+                    // if part of solution, pre-placed, or currently held, skip
+                    let is_held = self.held_piece.as_ref().map_or(false, |(idx, _)| *idx == i);
+                    if is_held || placed_indices.contains(&i) || (!self.solutions.is_empty() && self.solutions[self.solution_idx].iter().any(|p| p.piece_index == i)) {
                         continue;
                     }
                     

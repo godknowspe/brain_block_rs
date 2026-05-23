@@ -134,3 +134,61 @@ impl Puzzle {
         results
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn verify_solutions(puzzle: &Puzzle, sols: &[Vec<Placement>]) {
+        for sol in sols {
+            assert_eq!(sol.len(), puzzle.pieces.len(), "Each solution must use all pieces");
+            let mut piece_used = vec![false; puzzle.pieces.len()];
+            let mut cell_covered = vec![vec![false; puzzle.width as usize]; puzzle.height as usize];
+            for p in sol {
+                assert!(!piece_used[p.piece_index], "Each piece must be used exactly once");
+                piece_used[p.piece_index] = true;
+                for pt in &p.piece.coords {
+                    let cx = (pt.x + p.dx) as usize;
+                    let cy = (pt.y + p.dy) as usize;
+                    assert!(cx < puzzle.width as usize, "Cell x out of bounds");
+                    assert!(cy < puzzle.height as usize, "Cell y out of bounds");
+                    assert!(!cell_covered[cy][cx], "Each cell must be covered exactly once");
+                    cell_covered[cy][cx] = true;
+                }
+            }
+            // Check that all cells are covered
+            for y in 0..puzzle.height as usize {
+                for x in 0..puzzle.width as usize {
+                    assert!(cell_covered[y][x], "Cell ({}, {}) must be covered", x, y);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_solve_set_1() {
+        let puzzle = Puzzle::load_puzzle(1);
+        let sols = puzzle.solve(&[], 10);
+        assert!(!sols.is_empty(), "Set 1 should have solutions");
+        verify_solutions(&puzzle, &sols);
+        println!("Set 1 solutions: {}", sols.len());
+    }
+
+    #[test]
+    fn test_solve_set_2() {
+        let puzzle = Puzzle::load_puzzle(2);
+        let sols = puzzle.solve(&[], 10);
+        assert!(!sols.is_empty(), "Set 2 should have solutions");
+        verify_solutions(&puzzle, &sols);
+        println!("Set 2 solutions: {}", sols.len());
+    }
+
+    #[test]
+    fn test_solve_set_3() {
+        let puzzle = Puzzle::load_puzzle(3);
+        let sols = puzzle.solve(&[], 1);
+        assert!(!sols.is_empty(), "Set 3 should have solutions");
+        verify_solutions(&puzzle, &sols);
+        println!("Set 3 solutions: {}", sols.len());
+    }
+}
